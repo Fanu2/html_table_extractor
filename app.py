@@ -1,27 +1,34 @@
-import streamlit as st
-from extractor import html_table_to_df, df_to_docx
+import pandas as pd
+from bs4 import BeautifulSoup
+from io import BytesIO
+from docx import Document
 
-st.title("HTML Table to Word Converter")
-
-uploaded_file = st.file_uploader("Upload HTML File", type=["html", "htm"])
-
-if uploaded_file:
+def extract_all_tables(html):
+    """Extract all tables from HTML and return list of DataFrames."""
     try:
-        content = uploaded_file.read().decode('utf-8')
-        df = html_table_to_df(content)
+        tables = pd.read_html(html)
+        return tables
+    except Exception:
+        return []
 
-        if df is not None:
-            st.write("Extracted Table (First 7 columns):")
-            st.dataframe(df)
+def df_to_docx(df):
+    doc = Document()
+    table = doc.add_table(rows=1, cols=len(df.columns))
+    table.style = 'Table Grid'
 
-            docx_file = df_to_docx(df)
-            st.download_button(
-                label="Download as Word (.docx)",
-                data=docx_file,
-                file_name="extracted_table.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            )
-        else:
-            st.error("No table found in the uploaded HTML file.")
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+    # Add headers
+    hdr_cells = table.rows[0].cells
+    for i, col in enumerate(df.columns):
+        hdr_cells[i].text = str(col)
+
+    # Add data rows
+    for _, row in df.iterrows():
+        row_cells = table.add_row().cells
+        for i, item in enumerate(row):
+            row_cells[i].text = str(item)
+
+    # Output as BytesIO
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer
