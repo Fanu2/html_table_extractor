@@ -1,34 +1,39 @@
-import pandas as pd
-from bs4 import BeautifulSoup
-from io import BytesIO
-from docx import Document
+import streamlit as st
+from extractor import extract_all_tables, df_to_docx
 
-def extract_all_tables(html):
-    """Extract all tables from HTML and return list of DataFrames."""
+st.title("HTML Table to Word Converter")
+
+uploaded_file = st.file_uploader("Upload HTML File", type=["html", "htm"])
+
+if uploaded_file:
     try:
-        tables = pd.read_html(html)
-        return tables
-    except Exception:
-        return []
+        content = uploaded_file.read().decode('utf-8')
+        tables = extract_all_tables(content)
 
-def df_to_docx(df):
-    doc = Document()
-    table = doc.add_table(rows=1, cols=len(df.columns))
-    table.style = 'Table Grid'
+        if not tables:
+            st.error("No tables found in the uploaded HTML file.")
+        else:
+            st.success(f"Found {len(tables)} table(s)")
 
-    # Add headers
-    hdr_cells = table.rows[0].cells
-    for i, col in enumerate(df.columns):
-        hdr_cells[i].text = str(col)
+            table_index = st.selectbox("Select Table", range(len(tables)), format_func=lambda i: f"Table {i+1}")
+            max_cols = len(tables[table_index].columns)
+            max_rows = len(tables[table_index])
 
-    # Add data rows
-    for _, row in df.iterrows():
-        row_cells = table.add_row().cells
-        for i, item in enumerate(row):
-            row_cells[i].text = str(item)
+            skip_rows = st.number_input("Rows to skip (from top)", min_value=0, max_value=max_rows - 1, value=1)
+            num_columns = st.number_input("Number of columns to import", min_value=1, max_value=max_cols, value=8)
 
-    # Output as BytesIO
-    buffer = BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
-    return buffer
+            # Slice the selected DataFrame
+            df = tables[table_index].iloc[skip_rows:, :num_columns]
+
+            st.write("📄 Extracted Table Preview:")
+            st.dataframe(df)
+
+            docx_file = df_to_docx(df)
+            st.download_button(
+                label="⬇ Download as Word (.docx)",
+                data=docx_file,
+                file_name="extracted_table.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+    except Exception as e:
+        st.error(f"❌ An error occurred: {e}")
