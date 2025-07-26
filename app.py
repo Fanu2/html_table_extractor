@@ -1,5 +1,6 @@
 import streamlit as st
 from extractor import extract_all_tables, df_to_docx
+import pandas as pd
 
 st.title("HTML Table to Word Converter")
 
@@ -10,13 +11,13 @@ if uploaded_file:
         content = uploaded_file.read().decode('utf-8')
         tables = extract_all_tables(content)
 
-        # Filter out empty or invalid tables
+        # Filter out empty or malformed tables
         tables = [t for t in tables if not t.empty and t.shape[1] >= 5]
 
         if not tables:
             st.error("No valid tables found in the uploaded HTML file.")
         else:
-            # Use the largest table by number of rows
+            # Use the largest table
             table = max(tables, key=len)
             max_cols = len(table.columns)
             max_rows = len(table)
@@ -41,7 +42,14 @@ if uploaded_file:
                 value=min(8, max_cols)
             )
 
+            # Slice table
             df = table.iloc[skip_rows:, :num_columns]
+
+            # Replace NaN with blank strings
+            df = df.fillna("")
+
+            # Remove trailing fully empty rows
+            df = df[~(df.eq("").all(axis=1))]
 
             st.write("📄 Extracted Table Preview:")
             st.dataframe(df)
@@ -53,5 +61,6 @@ if uploaded_file:
                 file_name="extracted_table.docx",
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             )
+
     except Exception as e:
         st.error(f"❌ An error occurred: {e}")
