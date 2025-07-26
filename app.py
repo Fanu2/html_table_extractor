@@ -10,20 +10,38 @@ if uploaded_file:
         content = uploaded_file.read().decode('utf-8')
         tables = extract_all_tables(content)
 
+        # Filter out empty or invalid tables
+        tables = [t for t in tables if not t.empty and t.shape[1] >= 5]
+
         if not tables:
-            st.error("No tables found in the uploaded HTML file.")
+            st.error("No valid tables found in the uploaded HTML file.")
         else:
-            st.success(f"Found {len(tables)} table(s)")
+            # Use the largest table by number of rows
+            table = max(tables, key=len)
+            max_cols = len(table.columns)
+            max_rows = len(table)
 
-            table_index = st.selectbox("Select Table", range(len(tables)), format_func=lambda i: f"Table {i+1}")
-            max_cols = len(tables[table_index].columns)
-            max_rows = len(tables[table_index])
+            st.success(f"Found {len(tables)} table(s). Using the largest one with {max_rows} rows and {max_cols} columns.")
 
-            skip_rows = st.number_input("Rows to skip (from top)", min_value=0, max_value=max_rows - 1, value=1)
-            num_columns = st.number_input("Number of columns to import", min_value=1, max_value=max_cols, value=8)
+            if max_rows <= 1:
+                skip_rows = 0
+                st.info("Table has 1 row or less — skipping rows is not needed.")
+            else:
+                skip_rows = st.number_input(
+                    "Rows to skip (from top)",
+                    min_value=0,
+                    max_value=max(max_rows - 1, 0),
+                    value=1
+                )
 
-            # Slice the selected DataFrame
-            df = tables[table_index].iloc[skip_rows:, :num_columns]
+            num_columns = st.number_input(
+                "Number of columns to import",
+                min_value=1,
+                max_value=max_cols,
+                value=min(8, max_cols)
+            )
+
+            df = table.iloc[skip_rows:, :num_columns]
 
             st.write("📄 Extracted Table Preview:")
             st.dataframe(df)
